@@ -183,14 +183,19 @@ class DraftOverlay(QWidget):
         logger.info("DraftOverlay initialized")
 
     def _setup_window(self):
+        # PERBAIKAN: Gunakan NoFocus agar input keyboard tidak 'tersangkut' di overlay
         self.setWindowFlags(
             Qt.FramelessWindowHint |
             Qt.WindowStaysOnTopHint |
-            Qt.Tool
+            Qt.Tool |
+            Qt.NoFocus
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        
         self.setFixedWidth(self._overlay_width)
+        # PERBAIKAN: Beri tinggi minimum agar window tidak invisible saat init
+        self.setMinimumHeight(100) 
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
     def _build_ui(self):
@@ -433,7 +438,7 @@ class DraftOverlay(QWidget):
                     if sub and sub.widget():
                         sub.widget().show()
 
-        self.setMinimumHeight(0)
+        self.setMinimumHeight(100) # Pastikan tetap punya tinggi
         self.setMaximumHeight(16777215)
         self._min_btn.setText("\u2014")
         self._min_btn.setToolTip("Minimize overlay")
@@ -542,20 +547,16 @@ class DraftOverlay(QWidget):
             self.move(scrcpy_x - self._overlay_width - 5, scrcpy_y)
 
     def set_click_through(self, enabled: bool):
+        """
+        PERBAIKAN: Setel ulang window flags dan paksa show() agar window
+        tidak hilang (invisible) di sistem Windows saat berganti status click-through.
+        """
+        flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.NoFocus
         if enabled:
-            self.setWindowFlags(
-                Qt.FramelessWindowHint |
-                Qt.WindowStaysOnTopHint |
-                Qt.Tool |
-                Qt.WindowTransparentForInput
-            )
-        else:
-            self.setWindowFlags(
-                Qt.FramelessWindowHint |
-                Qt.WindowStaysOnTopHint |
-                Qt.Tool
-            )
-        self.show()
+            flags |= Qt.WindowTransparentForInput
+            
+        self.setWindowFlags(flags)
+        self.show() # WAJIB dipanggil setelah mengubah window flags
 
     def paintEvent(self, event):
         painter = QPainter(self)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import configparser
 import time
 import logging
+import os
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
@@ -119,9 +120,17 @@ class VisionScanner:
             setattr(self, attr_name, slot_list)
 
     def _load_templates(self):
-        templates_dir = Path(__file__).resolve().parent.parent / "templates"
+        """
+        PERBAIKAN: Penanganan path yang lebih tangguh. Memastikan program
+        mencari folder `templates` di root proyek.
+        """
+        base_path = Path(__file__).resolve().parent.parent
+        templates_dir = base_path / "templates"
+        
         if not templates_dir.exists():
-            logger.error(f"Templates dir not found: {templates_dir}")
+            os.makedirs(templates_dir, exist_ok=True)
+            logger.error(f"Folder templates tidak ditemukan, saya buatkan di: {templates_dir}")
+            logger.error("Silakan isi folder tersebut dengan gambar hero!")
             return
 
         for img_path in sorted(templates_dir.glob("*.png")):
@@ -130,9 +139,9 @@ class VisionScanner:
             if img is not None:
                 self.templates[hero_name] = img
             else:
-                logger.warning(f"Failed to load template: {img_path.name}")
+                logger.warning(f"Gagal memuat template gambar: {img_path.name}")
 
-        logger.info(f"Loaded {len(self.templates)} hero templates")
+        logger.info(f"Berhasil memuat {len(self.templates)} template hero")
 
     def find_scrcpy_window(self) -> bool:
         try:
@@ -166,15 +175,15 @@ class VisionScanner:
                 self._window_w = rect.right - rect.left
                 self._window_h = rect.bottom - rect.top
                 logger.info(
-                    f"Scrcpy window at ({self._window_x}, {self._window_y}) "
-                    f"size {self._window_w}x{self._window_h}"
+                    f"Scrcpy window ditemukan di ({self._window_x}, {self._window_y}) "
+                    f"ukuran {self._window_w}x{self._window_h}"
                 )
                 return True
             else:
-                logger.warning("Scrcpy window not found, using primary monitor")
+                logger.warning("Scrcpy window tidak ditemukan, menggunakan primary monitor")
                 return False
         except Exception as e:
-            logger.warning(f"Window detection failed: {e}")
+            logger.warning(f"Window detection gagal: {e}")
             return False
 
     def _capture_region(self, region: ScanRegion):
@@ -188,7 +197,7 @@ class VisionScanner:
                 img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
             return img
         except Exception as e:
-            logger.debug(f"Capture failed: {e}")
+            logger.debug(f"Gagal capture region {region}: {e}")
             return None
 
     def _match_hero(self, crop):
@@ -272,7 +281,7 @@ class VisionScanner:
         ):
             for slot in slot_list:
                 slot.hero = None
-        logger.info("Vision scanner reset")
+        logger.info("Vision scanner di-reset")
 
     def close(self):
         self._running = False
@@ -280,4 +289,4 @@ class VisionScanner:
             self._sct.close()
         except Exception:
             pass
-        logger.info("Vision scanner closed")
+        logger.info("Vision scanner ditutup")
