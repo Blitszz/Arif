@@ -1,10 +1,5 @@
 """
 MLBB AI Drafter - Main Entry Point
-
-Initializes all modules, starts the vision scan loop in a background thread,
-and runs the PyQt5 overlay UI on the main thread.
-
-Usage: python src/main.py
 """
 
 from __future__ import annotations
@@ -50,8 +45,6 @@ logger = logging.getLogger("main")
 
 
 class ScanLoop:
-    """Background scan loop that periodically captures and analyzes the draft screen."""
-
     def __init__(self, scanner: VisionScanner, logic: DraftLogic, overlay: DraftOverlay):
         self.scanner = scanner
         self.logic = logic
@@ -83,12 +76,6 @@ class ScanLoop:
                     self.overlay.update_analysis(
                         analysis, self.logic.state, result.scan_time
                     )
-                    logger.debug(
-                        f"Scan: {result.scan_time:.2f}s | "
-                        f"Team: {len(result.picks_team)} | "
-                        f"Enemy: {len(result.picks_enemy)} | "
-                        f"WR: {analysis.win_rate:.0f}%"
-                    )
                 time.sleep(self.scanner.scan_interval)
             except Exception as e:
                 logger.error(f"Scan loop error: {e}", exc_info=True)
@@ -96,8 +83,6 @@ class ScanLoop:
 
 
 class HotkeyHandler:
-    """Handles global hotkeys using pynput or keyboard library."""
-
     def __init__(self, scanner, logic, overlay, app):
         self.scanner = scanner
         self.logic = logic
@@ -109,7 +94,8 @@ class HotkeyHandler:
         try:
             from pynput import keyboard
             self._listener = keyboard.GlobalHotKeys({
-                '<f9>': self._toggle_scan,
+                '<alt>+s': self._toggle_scan,
+                '<alt>+m': self._toggle_minimize,
                 '<f10>': self._reset_draft,
                 '<f12>': self._quit_app,
             })
@@ -118,14 +104,13 @@ class HotkeyHandler:
         except ImportError:
             try:
                 import keyboard as kb
-                kb.add_hotkey('f9', self._toggle_scan)
+                kb.add_hotkey('alt+s', self._toggle_scan)
+                kb.add_hotkey('alt+m', self._toggle_minimize)
                 kb.add_hotkey('f10', self._reset_draft)
                 kb.add_hotkey('f12', self._quit_app)
                 logger.info("Hotkey listener started (keyboard)")
             except ImportError:
-                logger.warning(
-                    "No hotkey library available. Install pynput or keyboard."
-                )
+                logger.warning("No hotkey library available. Install pynput or keyboard.")
 
     def stop(self):
         if self._listener:
@@ -134,6 +119,9 @@ class HotkeyHandler:
     def _toggle_scan(self):
         paused = self.scanner.toggle_pause()
         QTimer.singleShot(0, lambda: self.overlay.set_paused(paused))
+        
+    def _toggle_minimize(self):
+        QTimer.singleShot(0, self.overlay._toggle_minimize)
 
     def _reset_draft(self):
         self.scanner.reset()
@@ -156,25 +144,20 @@ def main():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(True)
 
-    logger.info("Initializing Vision Scanner...")
     scanner = VisionScanner(config_path=config_path)
-
-    logger.info("Initializing Draft Logic...")
     logic = DraftLogic(hero_data_path=str(ROOT_DIR / "hero_data.json"))
-
-    logger.info("Initializing UI Overlay...")
     overlay = DraftOverlay(config_path=config_path)
 
-    logger.info("Searching for Scrcpy window...")
+    screen_geom = app.primaryScreen().geometry()
+
     found = scanner.find_scrcpy_window()
     if found:
         overlay.position_near_scrcpy(
             scanner._window_x, scanner._window_y,
-            scanner._window_w, scanner._window_h
+            scanner._window_w, scanner._window_h, screen_geom
         )
     else:
-        screen = app.primaryScreen().geometry()
-        overlay.move(screen.width() - overlay._overlay_width - 10, 10)
+        overlay.move(screen_geom.width() - overlay._overlay_width - 10, 10)
 
     overlay.set_click_through(True)
     overlay.show()
@@ -192,7 +175,7 @@ def main():
             if found_now:
                 overlay.position_near_scrcpy(
                     scanner._window_x, scanner._window_y,
-                    scanner._window_w, scanner._window_h
+                    scanner._window_w, scanner._window_h, screen_geom
                 )
 
     reposition_timer = QTimer()
@@ -210,7 +193,6 @@ def main():
 
     exit_code = app.exec_()
     sys.exit(exit_code)
-
 
 if __name__ == "__main__":
     main()
